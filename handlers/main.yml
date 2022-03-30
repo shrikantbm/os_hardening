@@ -1,0 +1,20 @@
+---
+# handlers file for os_hardening
+- name: Packages are Installed.
+  debug:
+    msg: packages are Installed.
+- name: Selinux Disabled.
+  debug:
+    msg: Selinux Disabled.
+- name: Firewall Disabled.
+  debug:
+    msg: Firewall Disabled.
+- name: syctl-settings Changed.
+  debug:
+    msg: syctl-settings Changed.
+- name: THP disabled.
+  debug:
+    msg: THP disabled.
+- name: NSCD NTPD service Restarted.
+  debug:
+    msg: NSCD NTPD service Restarted.

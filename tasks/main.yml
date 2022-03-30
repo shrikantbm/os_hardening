@@ -1,0 +1,146 @@
+---
+# tasks file for os_hardening
+- name: Disable Selinux.
+  selinux:
+    state: disabled
+  notify: Selinux Disabled.
+- name: Stop and disable firewalld.
+  service:
+    name: firewalld
+    state: stopped
+    enabled: false
+  notify: Firewall Disabled.
+- name: Change sysctl-settings
+  sysctl:
+    name: '{{ item.key }}'
+    value: '{{ item.value }}'
+    sysctl_set: yes
+    state: present
+    reload: yes
+  with_dict: '{{ sysctl_config }}'
+  notify: syctl-settings Changed.
+- name: Disable THP
+  shell: |
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+    echo -e 'echo never > /sys/kernel/mm/transparent_hugepage/enabled\necho never > /sys/kernel/mm/transparent_hugepage/defrag' >> /etc/rc.local
+    chmod 755 /etc/rc.local
+  notify: THP disabled.
+- name: Install a list of packages with a list variable
+  yum:
+    name: "{{ packages }}"
+    state: present
+    update_cache: true
+  notify: Packages are Installed.
+- name: Backup limits and 20-proc files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/security/limits.d/20-nproc.conf', dest: '/etc/security/limits.d/20-nproc.conf_bkp' }
+    - { src: '/etc/security/limits.conf', dest: '/etc/security/limits.conf_bkp' }
+- name: Modifying limits-conf
+  blockinfile:
+    path: /etc/security/limits.conf
+    block: |
+      hdfs - nofile 32768
+      mapred - nofile 32768
+      hbase - nofile 32768
+      yarn - nofile 32768
+      solr - nofile 32768
+      sqoop2 - nofile 32768
+      spark - nofile 32768
+      hive - nofile 32768
+      impala - nofile 32768
+      hue - nofile 32768
+      kafka - nofile 32768
+      hdfs - nproc 32768
+      mapred - nproc 32768
+      hbase - nproc 32768
+      yarn - nproc 32768
+      solr - nproc 32768
+      sqoop2 - nproc 32768
+      spark - nproc 32768
+      hive - nproc 32768
+      impala - nproc 32768
+      hue - nproc 32768
+      kafka - nproc 32768
+- name: Modifying nproc-conf
+  blockinfile:
+    path: /etc/security/limits.d/20-nproc.conf
+    block: |
+      hdfs - nproc 32768
+      mapred - nproc 32768
+      hbase - nproc 32768
+      yarn - nproc 32768
+      solr - nproc 32768
+      sqoop2 - nproc 32768
+      spark - nproc 32768
+      hive - nproc 32768
+      impala - nproc 32768
+      hue - nproc 32768
+      kafka - nproc 32768
+- name: Replace the soft and hard nproc/nofile in limts.conf
+  pam_limits:
+    domain: '*'
+    limit_type: "{{item.limit_type}}"
+    limit_item: "{{item.limit_item}}"
+    value: "{{item.value}}"
+  with_items:
+    - { limit_type: 'soft', limit_item: 'nofile', value: 102400 }
+    - { limit_type: 'soft', limit_item: 'nproc', value: 10240 }
+    - { limit_type: 'hard', limit_item: 'nofile', value: 102400 }
+    - { limit_type: 'hard', limit_item: 'nproc', value: 10240 }
+- name: Replace the soft and hard nproc/nofile in 20-nproc.conf
+  pam_limits:
+    dest: /etc/security/limits.d/20-nproc.conf
+    domain: '*'
+    limit_type: "{{item.limit_type}}"
+    limit_item: "{{item.limit_item}}"
+    value: "{{item.value}}"
+  with_items:
+    - { limit_type: 'soft', limit_item: 'nofile', value: 102400 }
+    - { limit_type: 'soft', limit_item: 'nproc', value: 10240 }
+    - { limit_type: 'hard', limit_item: 'nofile', value: 102400 }
+    - { limit_type: 'hard', limit_item: 'nproc', value: 10240 }
+- name: reload settings from all system configuration files
+  shell: sysctl --system
+- name: Modify nscd
+  blockinfile:
+    path: /etc/nscd.conf
+    block: |2
+              reload-count                            unlimited
+              positive-time-to-live   passwd          3600
+              suggested-size          passwd          211
+- name: Restart enable Nscd and ntpd
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+  with_items:
+    - ntpd
+    - nscd
+  notify: NSCD NTPD service Restarted.
+- name: Create java required Directories
+  shell: |
+    mkdir -p /usr/java/ && mkdir -p /usr/share/java
+    chmod 755 /usr/java/
+    chmod 755 /usr/share/java
+- name: Download java tar file from repo
+  get_url:
+    url: http://172.16.8.85/java_install/jdk-8u291-linux-x64.tar.gz
+    dest: /usr/java/jdk-8u291-linux-x64.tar.gz
+    mode: 0777
+- name: Download mysql-connector jar from repo
+  get_url:
+    url: http://172.16.8.85/mysql_connector/mysql-connector-java-5.1.45-bin.jar
+    dest: /usr/share/java/
+    mode: 0777
+- name: Java Installtion and Creating Mysql_connector jar symlink
+  shell: |
+    tar -zvxf /usr/java/jdk* -C /usr/java/
+    ln -s /usr/java/jdk1* /usr/java/latest
+    ln -s /usr/java/latest /usr/java/default
+    alternatives --install /usr/bin/java java /usr/java/jdk1*/bin/java 1
+    ln -s /usr/share/java/mysql-connector-java*.jar /usr/share/java/mysql-connector-java.jar
+
